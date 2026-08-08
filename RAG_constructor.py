@@ -101,7 +101,7 @@ def ParagraphedSentenceAwareFixedSizeChunking(text, target_chunk_size):
     return chunks
    
       
-#py RAG_constructor.py --path PDFs_for_Parsing\"Wuthering heights.pdf" --new_embeddings True --fixed_chunk_size 250
+#py RAG_constructor.py --path example_PDFs\"Wuthering heights.pdf" --new_embeddings True --fixed_chunk_size 250
 def main():
     args = sys.argv[1:]
     

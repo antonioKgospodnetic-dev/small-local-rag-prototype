@@ -1,7 +1,7 @@
 import sys
 import argparse
 from openai import OpenAI
-from Context_provider_v2 import GetPromptContext
+from Context_provider import GetPromptContext
 
 def ParseArgs(args):
     # cmd_params = {"--query", "--num_context_chunks"}
