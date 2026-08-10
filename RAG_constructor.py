@@ -1,31 +1,62 @@
 import sys
+import argparse
 from pypdf import PdfReader
+from pathlib import Path
 import re
 import spacy
 import chromadb
 import chromadb.utils.embedding_functions
-  
+
+
+def ValidDatabaseName(value):
+    if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{1,510}[a-z0-9]", value):
+        raise argparse.ArgumentTypeError(
+            "Database name must be 3-512 characters, "
+            "start and end with a lowercase letter or number, "
+            "and contain only lowercase letters, numbers, '.', '_' and '-'."
+        )
+
+    if ".." in value:
+        raise argparse.ArgumentTypeError(
+            "Database name may not contain consecutive dots."
+        )
+
+    return value
+
 def ParseArgs(args):
-    # cmd_params = {"--path","--fixed_chunk_size","--new_embeddings"}
-    pdf_path, fixed_chunk_size, new_embeddings = None,None,None
-    for i_arg in range(0, len(args)):
-        if (args[i_arg] == "--path"):
-            i_arg = i_arg + 1
-            pdf_path = args[i_arg]
-        elif (args[i_arg] == "--fixed_chunk_size"):
-            i_arg = i_arg + 1                
-            fixed_chunk_size = int(args[i_arg])
-        elif (args[i_arg] == "--new_embeddings"):
-            i_arg = i_arg + 1                
-            new_embeddings = bool(args[i_arg])
+    # cmd_params = {"--path", "--fixed_chunk_size", "--new_embeddings", "--name"}
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument(
+        "--path",
+        type=str,
+        required=True,
+        help="Path to the pdf document."
+    )
             
-    # default
-    if(fixed_chunk_size == None):
-        fixed_chunk_size = 250
-    if(new_embeddings == None):
-        new_embeddings = False        
+    parser.add_argument(
+        "--fixed_chunk_size",
+        type=int,
+        default=250,
+        required=False,
+        help="The minimal amount of characters a chunk is supposed to contain."
+    )
         
-    return pdf_path, fixed_chunk_size, new_embeddings
+    parser.add_argument(
+        "--new_embeddings",
+        action="store_true",
+        help="Cleanly rebuild the existing embedding collection."
+    )
+    
+    parser.add_argument(
+        "--database_name",
+        type=ValidDatabaseName,
+        default="new_name",
+        required=False,
+        help="Name for collection, it will decide the directory name of the collection."
+    )
+        
+    return parser.parse_args(args)
   
 def ParsePDF(path):
     reader = PdfReader(path)
@@ -101,13 +132,16 @@ def ParagraphedSentenceAwareFixedSizeChunking(text, target_chunk_size):
     return chunks
    
       
-#py RAG_constructor.py --path example_PDFs\"Wuthering heights.pdf" --new_embeddings True --fixed_chunk_size 250
-def main():
-    args = sys.argv[1:]
+#py RAG_constructor.py --path "example_PDFs\Wuthering heights.pdf" --database_name wuthering_heights --new_embeddings --fixed_chunk_size 250
+def main():    
+    args = ParseArgs(sys.argv[1:])
     
-    pdf_path, fixed_chunk_size, new_embeddings = ParseArgs(args)
+    pdf_path = args.path
+    fixed_chunk_size = args.fixed_chunk_size
+    new_embeddings = args.new_embeddings
+    collection_name = args.database_name
     
-    if ((fixed_chunk_size < 1) or (fixed_chunk_size>2500)):
+    if ((fixed_chunk_size < 1) or (fixed_chunk_size > 2500)):
         print("err: Incorrect fixed chunk size")
         exit(1)
 
@@ -122,21 +156,26 @@ def main():
         )
     )
     
+    database_path = (
+        Path(__file__).resolve().parent
+        / f"chroma_database_{collection_name}"
+    )
+
     client = chromadb.PersistentClient(
-        path="./chroma_database"
+        path=str(database_path)
     )
 
     # If flag is true, cleanly rebuild
     if (new_embeddings):
         try:
-            client.delete_collection(name="wuthering_heights")
+            client.delete_collection(name=collection_name)
             print("Succesfully deleted existing collection")
         except Exception:
             print("Failed deleting existing collection")
             pass
 
     collection = client.get_or_create_collection(
-        name="wuthering_heights",
+        name=collection_name,
         embedding_function=embedding_function
     )
 
