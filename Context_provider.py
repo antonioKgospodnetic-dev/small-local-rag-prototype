@@ -4,14 +4,25 @@ from pathlib import Path
 import re
 import chromadb
 from chromadb.utils.embedding_functions import (
-    SentenceTransformerEmbeddingFunction,
+    SentenceTransformerEmbeddingFunction
 )
   
-  
+
+# Validation of inputs
 SUPPORTED_EMBEDDING_MODELS = [
     "all-MiniLM-L6-v2",
     "all-mpnet-base-v2"
 ]
+  
+def PositiveContextChunkCount(value):
+    value = int(value)
+
+    if value < 1:
+        raise argparse.ArgumentTypeError(
+            "Number of context chunks must be atleast 1."
+        )
+
+    return value
   
 def ValidDatabaseName(value):
     if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{1,510}[a-z0-9]", value):
@@ -28,6 +39,12 @@ def ValidDatabaseName(value):
 
     return value
   
+def ValidateEmbeddingModel(model):
+    if model not in SUPPORTED_EMBEDDING_MODELS:
+        raise ValueError(
+            f"Unsupported embedding model: '{model}'."
+        )
+  
 def ParseArgs(args):
     # cmd_params = {"--query", "--num_context_chunks"}
     parser = argparse.ArgumentParser(
@@ -43,7 +60,7 @@ def ParseArgs(args):
     
     parser.add_argument(
         "--num_context_chunks",
-        type=int,
+        type=PositiveContextChunkCount,
         default=2,
         required=False,
         help="The amount the chunks that should be added as context."
@@ -66,7 +83,15 @@ def ParseArgs(args):
 
     return parser.parse_args(args)
   
-def GetPromptContext(query, num_context_chunks, collection_name, embedding_model):    
+def GetPromptContext(collection_name, embedding_model, query, num_context_chunks):  
+    #Checks
+    ValidateEmbeddingModel(embedding_model)
+    
+    if num_context_chunks < 1:
+        raise ValueError(
+            "num_context_chunks must be atleast 1."
+        )
+      
     # This must match the model used to embed the book chunks.
     embedding_function = SentenceTransformerEmbeddingFunction(
         model_name=embedding_model
@@ -81,10 +106,15 @@ def GetPromptContext(query, num_context_chunks, collection_name, embedding_model
         path=str(database_path)
     )
 
-    collection = client.get_collection(
-        name=collection_name,
-        embedding_function=embedding_function
-    )
+    try:
+        collection = client.get_collection(
+            name=collection_name,
+            embedding_function=embedding_function
+        )
+    except ValueError as e:
+        raise ValueError(
+            f"ChromaDB collection '{collection_name}' does not exist."
+        ) from e
     
     # Stage 1: Semantic retrieval.
     results = collection.query(
@@ -152,11 +182,12 @@ def main():
     database_name = args.database_name
     embedding_model = args.embedding_model
     
-    if ((fixed_chunk_size < 1) or (fixed_chunk_size > 2500)):
-        print("err: Incorrect fixed chunk size")
-        exit(1)
-    
-    retrieved_context = GetPromptContext(query, fixed_chunk_size, database_name, embedding_model)
+    try:
+        retrieved_context = GetPromptContext(database_name, embedding_model, query, fixed_chunk_size)
+
+    except Exception as e:
+        print(f"Error: {e}")
+        return 1
     
     print(f"Retrieved context:\n{retrieved_context}\nQuestion:\n{args.query}")
     

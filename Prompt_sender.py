@@ -5,10 +5,21 @@ from openai import OpenAI
 from Context_provider import GetPromptContext
 
 
+# Validation of inputs
 SUPPORTED_EMBEDDING_MODELS = [
     "all-MiniLM-L6-v2",
     "all-mpnet-base-v2"
 ]
+
+def PositiveContextChunkCount(value):
+    value = int(value)
+
+    if value < 1:
+        raise argparse.ArgumentTypeError(
+            "Number of context chunks must be atleast 1."
+        )
+
+    return value
 
 def ValidDatabaseName(value):
     if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{1,510}[a-z0-9]", value):
@@ -40,7 +51,7 @@ def ParseArgs(args):
     
     parser.add_argument(
         "--num_context_chunks",
-        type=int,
+        type=PositiveContextChunkCount,
         default=2,
         required=False,
         help="The amount the chunks that should be added as context."
@@ -64,30 +75,14 @@ def ParseArgs(args):
     return parser.parse_args(args)
 
 
-#py Prompt_sender.py --query "How long did Cathy stay at the Thrushcross Grange?" --database_name wuthering_heights --embedding_model "all-mpnet-base-v2"
-#py Prompt_sender.py --query "How long did Cathy stay at the Thrushcross Grange?" --database_name wuthering_heights --num_context_chunks 2
-#py Prompt_sender.py --query "What did Alice find on a little glass table?" --database_name alice --num_context_chunks 2 
-#py Prompt_sender.py --query "Why does Alice not like the look of her sister’s book?" --database_name alice --num_context_chunks 2
-#py Prompt_sender.py --query "What is the handbook about?" --database_name handbook --num_context_chunks 2
-#py Prompt_sender.py --query "What is the definition of the concept called 'Overcover age - rate'?" --database_name handbook --num_context_chunks 2  
-#py Prompt_sender.py --query "What was the unemployment rate in cities compared with rural areas in 2023?" --database_name statistics --num_context_chunks 1
-def main():
-    args = ParseArgs(sys.argv[1:])
+def GetRAGsAnswer(collection_name, embedding_model, query, num_context_chunks):
+    #Checks
+    if num_context_chunks < 1:
+        raise ValueError(
+            "num_context_chunks must be atleast 1."
+        )
     
-    query = args.query
-    num_context_chunks = args.num_context_chunks
-    collection_name = args.database_name
-    embedding_model = args.embedding_model
-    
-    if ((num_context_chunks < 1) or (num_context_chunks > 2500)):
-        print("err: Incorrect fixed chunk size")
-        exit(1)
-    
-    try:
-        retrieved_context = GetPromptContext(query, num_context_chunks, collection_name, embedding_model)
-    except:
-        print("Err: Running query expansion function failed")
-        exit(1)
+    retrieved_context = GetPromptContext(collection_name, embedding_model, query, num_context_chunks)
     
     llm_client = OpenAI(
         base_url="http://localhost:1234/v1",
@@ -118,6 +113,31 @@ def main():
     )
 
     answer = completion.choices[0].message.content
+    
+    return retrieved_context, answer
+
+
+#py Prompt_sender.py --query "How long did Cathy stay at the Thrushcross Grange?" --database_name wuthering_heights --embedding_model "all-mpnet-base-v2"
+#py Prompt_sender.py --query "How long did Cathy stay at the Thrushcross Grange?" --database_name wuthering_heights --num_context_chunks 2
+#py Prompt_sender.py --query "What did Alice find on a little glass table?" --database_name alice --num_context_chunks 2 
+#py Prompt_sender.py --query "Why does Alice not like the look of her sister’s book?" --database_name alice --num_context_chunks 2
+#py Prompt_sender.py --query "What is the handbook about?" --database_name handbook --num_context_chunks 2
+#py Prompt_sender.py --query "What is the definition of the concept called 'Overcover age - rate'?" --database_name handbook --num_context_chunks 2  
+#py Prompt_sender.py --query "What was the unemployment rate in cities compared with rural areas in 2023?" --database_name statistics --num_context_chunks 1
+def main():
+    args = ParseArgs(sys.argv[1:])
+    
+    query = args.query
+    num_context_chunks = args.num_context_chunks
+    collection_name = args.database_name
+    embedding_model = args.embedding_model
+
+    try:
+        retrieved_context, answer = GetRAGsAnswer(collection_name, embedding_model, query, num_context_chunks)
+
+    except Exception as e:
+        print(f"RAG failed: {e}")
+        return 1
 
     print("\nQuestion:")
     print(query)
