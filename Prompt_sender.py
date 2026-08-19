@@ -21,6 +21,16 @@ def PositiveContextChunkCount(value):
 
     return value
 
+def ValidNeighborChunkCount(value):
+    value = int(value)
+
+    if value < 0:
+        raise argparse.ArgumentTypeError(
+            "Number of neighboring chunks must not be negative."
+        )
+
+    return value
+
 def ValidDatabaseName(value):
     if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{1,510}[a-z0-9]", value):
         raise argparse.ArgumentTypeError(
@@ -43,21 +53,6 @@ def ParseArgs(args):
     )
 
     parser.add_argument(
-        "--query",
-        type=str,
-        required=True,
-        help="The query that should be expanded."
-    )
-    
-    parser.add_argument(
-        "--num_context_chunks",
-        type=PositiveContextChunkCount,
-        default=2,
-        required=False,
-        help="The amount the chunks that should be added as context."
-    )
-
-    parser.add_argument(
         "--database_name",
         type=ValidDatabaseName,
         required=True,
@@ -71,18 +66,36 @@ def ParseArgs(args):
         default="all-MiniLM-L6-v2",
         help="Sentence Transformer model used to create embeddings."
     )
+    
+    parser.add_argument(
+        "--query",
+        type=str,
+        required=True,
+        help="The query that should be expanded."
+    )
+    
+    parser.add_argument(
+        "--num_context_chunks",
+        type=PositiveContextChunkCount,
+        default=2,
+        required=False,
+        help="The amount the chunks that should be added as context."
+    )
+    
+    parser.add_argument(
+        "--range_neighbor_chunks",
+        type=ValidNeighborChunkCount,
+        default=1,
+        required=False,
+        help="Number of neighboring chunks to add on each side of every retrieved chunk."
+    )
 
     return parser.parse_args(args)
 
 
-def GetRAGsAnswer(collection_name, embedding_model, query, num_context_chunks):
-    #Checks
-    if num_context_chunks < 1:
-        raise ValueError(
-            "num_context_chunks must be atleast 1."
-        )
+def GetRAGsAnswer(collection_name, embedding_model, query, num_context_chunks, range_neighbor_chunks):
     
-    retrieved_context = GetPromptContext(collection_name, embedding_model, query, num_context_chunks)
+    retrieved_context = GetPromptContext(collection_name, embedding_model, query, num_context_chunks, range_neighbor_chunks)
     
     llm_client = OpenAI(
         base_url="http://localhost:1234/v1",
@@ -119,7 +132,7 @@ def GetRAGsAnswer(collection_name, embedding_model, query, num_context_chunks):
 
 #py Prompt_sender.py --query "How long did Cathy stay at the Thrushcross Grange?" --database_name wuthering_heights --embedding_model "all-mpnet-base-v2"
 #py Prompt_sender.py --query "How long did Cathy stay at the Thrushcross Grange?" --database_name wuthering_heights --num_context_chunks 2
-#py Prompt_sender.py --query "What did Alice find on a little glass table?" --database_name alice --num_context_chunks 2 
+#py Prompt_sender.py --query "What did Alice find on a little glass table?" --database_name alice --num_context_chunks 2 --range_neighbor_chunks 3
 #py Prompt_sender.py --query "Why does Alice not like the look of her sister’s book?" --database_name alice --num_context_chunks 2
 #py Prompt_sender.py --query "What is the handbook about?" --database_name handbook --num_context_chunks 2
 #py Prompt_sender.py --query "What is the definition of the concept called 'Overcover age - rate'?" --database_name handbook --num_context_chunks 2  
@@ -131,9 +144,10 @@ def main():
     num_context_chunks = args.num_context_chunks
     collection_name = args.database_name
     embedding_model = args.embedding_model
+    range_neighbor_chunks = args.range_neighbor_chunks
 
     try:
-        retrieved_context, answer = GetRAGsAnswer(collection_name, embedding_model, query, num_context_chunks)
+        retrieved_context, answer = GetRAGsAnswer(collection_name, embedding_model, query, num_context_chunks, range_neighbor_chunks)
 
     except Exception as e:
         print(f"RAG failed: {e}")
