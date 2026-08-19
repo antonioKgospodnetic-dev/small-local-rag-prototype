@@ -5,8 +5,13 @@ from pathlib import Path
 import re
 import spacy
 import chromadb
-import chromadb.utils.embedding_functions
+import chromadb.utils.embedding_functions 
 
+
+SUPPORTED_EMBEDDING_MODELS = [
+    "all-MiniLM-L6-v2",
+    "all-mpnet-base-v2"
+]
 
 def ValidDatabaseName(value):
     if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{1,510}[a-z0-9]", value):
@@ -55,6 +60,14 @@ def ParseArgs(args):
         required=False,
         help="Name for collection, it will decide the directory name of the collection."
     )
+    
+    parser.add_argument(
+        "--embedding_model",
+        type=str,
+        choices=SUPPORTED_EMBEDDING_MODELS,
+        default="all-MiniLM-L6-v2",
+        help="Sentence Transformer model used to create embeddings."
+    )
         
     return parser.parse_args(args)
   
@@ -69,7 +82,7 @@ def ParsePDF(path):
     
     return pdf_text
   
-def FixedSizeChunking(text, chunk_size):
+def NaiveFixedSizeChunking(text, chunk_size):
     chunks = []
     for i in range(0, len(text), chunk_size):
         chunks.append(text[(i):(chunk_size+i)])
@@ -132,7 +145,13 @@ def ParagraphedSentenceAwareFixedSizeChunking(text, target_chunk_size):
     return chunks
    
       
+#py RAG_constructor.py --path "example_PDFs\Wuthering heights.pdf" --database_name wuthering_heights
+#py RAG_constructor.py --path "example_PDFs\Wuthering heights.pdf" --database_name wuthering_heights --new_embeddings --embedding_model "all-mpnet-base-v2"
 #py RAG_constructor.py --path "example_PDFs\Wuthering heights.pdf" --database_name wuthering_heights --new_embeddings --fixed_chunk_size 250
+#py RAG_constructor.py --path "example_PDFs\Alice_in_wonderland.pdf" --database_name alice --new_embeddings --fixed_chunk_size 250
+#py RAG_constructor.py --path "example_PDFs\Dr_Hyde.pdf" --database_name hyde --new_embeddings --fixed_chunk_size 250
+#py RAG_constructor.py --path "example_PDFs\Handbook for quality and metadata reports ESS.pdf" --database_name handbook --new_embeddings --fixed_chunk_size 250
+#py RAG_constructor.py --path "example_PDFs\Eurostat - Urban-rural Europe- labour market.pdf" --database_name statistics --new_embeddings --fixed_chunk_size 150
 def main():    
     args = ParseArgs(sys.argv[1:])
     
@@ -140,7 +159,9 @@ def main():
     fixed_chunk_size = args.fixed_chunk_size
     new_embeddings = args.new_embeddings
     collection_name = args.database_name
+    embedding_model = args.embedding_model
     
+    #Checks
     if ((fixed_chunk_size < 1) or (fixed_chunk_size > 2500)):
         print("err: Incorrect fixed chunk size")
         exit(1)
@@ -149,12 +170,19 @@ def main():
         
     chunks = ParagraphedSentenceAwareFixedSizeChunking(text, fixed_chunk_size)
     
+    print("Chunking completed. Starting embedding process.")
+    
     # Embedding model
-    embedding_function = (
-        chromadb.utils.embedding_functions.SentenceTransformerEmbeddingFunction(
-            model_name="all-MiniLM-L6-v2"
+    try:
+        embedding_function = (
+            chromadb.utils.embedding_functions.SentenceTransformerEmbeddingFunction(
+                model_name=embedding_model
+            )
         )
-    )
+    except Exception as e:
+        print(f"Err: Could not load embedding model '{embedding_model}'")
+        print(e)
+        exit(1)
     
     database_path = (
         Path(__file__).resolve().parent

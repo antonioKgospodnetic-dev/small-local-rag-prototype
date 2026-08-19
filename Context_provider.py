@@ -7,7 +7,11 @@ from chromadb.utils.embedding_functions import (
     SentenceTransformerEmbeddingFunction,
 )
   
-EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+  
+SUPPORTED_EMBEDDING_MODELS = [
+    "all-MiniLM-L6-v2",
+    "all-mpnet-base-v2"
+]
   
 def ValidDatabaseName(value):
     if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{1,510}[a-z0-9]", value):
@@ -40,7 +44,8 @@ def ParseArgs(args):
     parser.add_argument(
         "--num_context_chunks",
         type=int,
-        required=True,
+        default=2,
+        required=False,
         help="The amount the chunks that should be added as context."
     )
     
@@ -50,13 +55,21 @@ def ParseArgs(args):
         required=True,
         help="Name of the ChromaDB collection to query."
     )
+    
+    parser.add_argument(
+        "--embedding_model",
+        type=str,
+        choices=SUPPORTED_EMBEDDING_MODELS,
+        default="all-MiniLM-L6-v2",
+        help="Sentence Transformer model used to create embeddings."
+    )
 
     return parser.parse_args(args)
   
-def GetPromptContext(query, num_context_chunks, collection_name):
+def GetPromptContext(query, num_context_chunks, collection_name, embedding_model):    
     # This must match the model used to embed the book chunks.
     embedding_function = SentenceTransformerEmbeddingFunction(
-        model_name=EMBEDDING_MODEL
+        model_name=embedding_model
     )
     
     database_path = (
@@ -129,6 +142,7 @@ def GetPromptContext(query, num_context_chunks, collection_name):
     return retrieved_context
 
 
+#py Context_provider.py --query "How long did Cathy stay at the Thrushcross Grange?" --database_name wuthering_heights --embedding_model "all-mpnet-base-v2"
 #py Context_provider.py --query "How long did Cathy stay at the Thrushcross Grange?" --database_name wuthering_heights --num_context_chunks 2 
 def main():
     args = ParseArgs(sys.argv[1:])
@@ -136,12 +150,13 @@ def main():
     query = args.query
     fixed_chunk_size = args.num_context_chunks
     database_name = args.database_name
+    embedding_model = args.embedding_model
     
     if ((fixed_chunk_size < 1) or (fixed_chunk_size > 2500)):
         print("err: Incorrect fixed chunk size")
         exit(1)
     
-    retrieved_context = GetPromptContext(query, fixed_chunk_size, database_name)
+    retrieved_context = GetPromptContext(query, fixed_chunk_size, database_name, embedding_model)
     
     print(f"Retrieved context:\n{retrieved_context}\nQuestion:\n{args.query}")
     
