@@ -6,13 +6,8 @@ import chromadb
 from chromadb.utils.embedding_functions import (
     SentenceTransformerEmbeddingFunction
 )
+from RAG_constructor import SUPPORTED_EMBEDDING_MODELS
   
-
-# Validation of inputs
-SUPPORTED_EMBEDDING_MODELS = [
-    "all-MiniLM-L6-v2",
-    "all-mpnet-base-v2"
-]
   
 def PositiveContextChunkCount(value):
     value = int(value)
@@ -222,13 +217,51 @@ def GetPromptContext(collection_name, embedding_model, query, num_context_chunks
         key=lambda chunk: chunk["chunk_index"]
     )
 
-    retrieved_context = "\n\n".join(
-        chunk["document"]
-        for chunk in expanded_chunks
-    )
+    # Deviding gotten chunks into groups of passages
+    passages = []
+    current_passage = []
+
+    for chunk in expanded_chunks:
+        if not current_passage:
+            current_passage.append(chunk)
+            continue
+
+        previous_index = current_passage[-1]["chunk_index"]
+        current_index = chunk["chunk_index"]
+
+        if current_index == previous_index + 1:
+            # Still part of the same continuous passage
+            current_passage.append(chunk)
+        else:
+            passages.append(current_passage)
+            current_passage = [chunk]
+
+    if current_passage:
+        passages.append(current_passage)
+        
+    # Creating and returning a list containing all the passages
+    retrieved_context = []
+    for i, passage in enumerate(passages, start=1):
+        passage_text = "\n\n".join(
+            chunk["document"]
+            for chunk in passage
+        )
+        
+        retrieved_context.append(passage_text)
 
     return retrieved_context
 
+
+def FormatPassages(passages):
+    formatted_passages = []
+
+    for i, passage in enumerate(passages, start=1):
+        formatted_passages.append(
+            f"[PASSAGE {i}]\n{passage}"
+        )
+
+    return "\n\n".join(formatted_passages)
+  
 
 #py Context_provider.py --query "How long did Cathy stay at the Thrushcross Grange?" --database_name wuthering_heights --embedding_model "all-mpnet-base-v2"
 #py Context_provider.py --query "How long did Cathy stay at the Thrushcross Grange?" --database_name wuthering_heights --num_context_chunks 2 
@@ -249,7 +282,7 @@ def main():
         print(f"Error: {e}")
         return 1
     
-    print(f"Retrieved context:\n{retrieved_context}\nQuestion:\n{args.query}")
+    print(f"Retrieved context:\n{FormatPassages(retrieved_context)}\nQuestion:\n{args.query}")
     
 if __name__ == "__main__":
     main()
