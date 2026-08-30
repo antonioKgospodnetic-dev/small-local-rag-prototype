@@ -144,23 +144,7 @@ def ParagraphedSentenceAwareFixedSizeChunking(text, target_chunk_size):
     
     return chunks
    
-      
-#py RAG_constructor.py --path "example_PDFs\Wuthering heights.pdf" --database_name wuthering_heights
-#py RAG_constructor.py --path "example_PDFs\Wuthering heights.pdf" --database_name wuthering_heights --new_embeddings --embedding_model "all-mpnet-base-v2"
-#py RAG_constructor.py --path "example_PDFs\Wuthering heights.pdf" --database_name wuthering_heights --new_embeddings --fixed_chunk_size 250
-#py RAG_constructor.py --path "example_PDFs\Alice_in_wonderland.pdf" --database_name alice --new_embeddings --fixed_chunk_size 250
-#py RAG_constructor.py --path "example_PDFs\Dr_Hyde.pdf" --database_name hyde --new_embeddings --fixed_chunk_size 250
-#py RAG_constructor.py --path "example_PDFs\Handbook for quality and metadata reports ESS.pdf" --database_name handbook --new_embeddings --fixed_chunk_size 250
-#py RAG_constructor.py --path "example_PDFs\Eurostat - Urban-rural Europe- labour market.pdf" --database_name statistics --new_embeddings --fixed_chunk_size 150
-def main():    
-    args = ParseArgs(sys.argv[1:])
-    
-    pdf_path = args.path
-    fixed_chunk_size = args.fixed_chunk_size
-    new_embeddings = args.new_embeddings
-    collection_name = args.database_name
-    embedding_model = args.embedding_model
-    
+def ConstructRAG(pdf_path, fixed_chunk_size, new_embeddings, collection_name, embedding_model):
     #Checks
     if ((fixed_chunk_size < 1) or (fixed_chunk_size > 2500)):
         print("err: Incorrect fixed chunk size")
@@ -230,10 +214,33 @@ def main():
         documents=chunks,
         metadatas=chunk_metadatas
     )
+    
+    return len(chunks)
+      
+      
+#py RAG_constructor.py --path "example_PDFs\Wuthering heights.pdf" --database_name wuthering_heights
+#py RAG_constructor.py --path "example_PDFs\Wuthering heights.pdf" --database_name wuthering_heights --new_embeddings --embedding_model "all-mpnet-base-v2"
+#py RAG_constructor.py --path "example_PDFs\Wuthering heights.pdf" --database_name wuthering_heights --new_embeddings --fixed_chunk_size 250
+#py RAG_constructor.py --path "example_PDFs\Alice_in_wonderland.pdf" --database_name alice --new_embeddings --fixed_chunk_size 250
+#py RAG_constructor.py --path "example_PDFs\Handbook for quality and metadata reports ESS.pdf" --database_name handbook --new_embeddings --fixed_chunk_size 250
+#py RAG_constructor.py --path "example_PDFs\Eurostat - Urban-rural Europe- labour market.pdf" --database_name statistics --new_embeddings --fixed_chunk_size 150
+def main():    
+    args = ParseArgs(sys.argv[1:])
+    
+    pdf_path = args.path
+    fixed_chunk_size = args.fixed_chunk_size
+    new_embeddings = args.new_embeddings
+    collection_name = args.database_name
+    embedding_model = args.embedding_model
+    
+    try:
+        chunk_count = ConstructRAG(pdf_path, fixed_chunk_size, new_embeddings, collection_name, embedding_model)
+    
+        print(f"RAG constructed with {chunk_count} chunks.")
 
-    # Number of chunks in collection must match provided chunks
-    print("Number of chunks:", len(chunks))
-    print("Number of chunks stored in ChromaDB:", collection.count())
+    except Exception as e:
+        print(f"RAG construction failed: {e}")
+        return 1
         
 
 if __name__ == "__main__":

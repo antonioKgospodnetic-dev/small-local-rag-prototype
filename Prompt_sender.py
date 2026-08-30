@@ -2,14 +2,8 @@ import sys
 import argparse
 import re
 from openai import OpenAI
-from Context_provider import GetPromptContext
-
-
-# Validation of inputs
-SUPPORTED_EMBEDDING_MODELS = [
-    "all-MiniLM-L6-v2",
-    "all-mpnet-base-v2"
-]
+from Context_provider import GetPromptContext, FormatPassages
+from RAG_constructor import SUPPORTED_EMBEDDING_MODELS
 
 def PositiveContextChunkCount(value):
     value = int(value)
@@ -92,10 +86,10 @@ def ParseArgs(args):
 
     return parser.parse_args(args)
 
-
 def GetRAGsAnswer(collection_name, embedding_model, query, num_context_chunks, range_neighbor_chunks):
     
-    retrieved_context = GetPromptContext(collection_name, embedding_model, query, num_context_chunks, range_neighbor_chunks)
+    retrieved_context_passages = GetPromptContext(collection_name, embedding_model, query, num_context_chunks, range_neighbor_chunks)
+    retrieved_context = FormatPassages(retrieved_context_passages)
     
     llm_client = OpenAI(
         base_url="http://localhost:1234/v1",
@@ -131,7 +125,7 @@ def GetRAGsAnswer(collection_name, embedding_model, query, num_context_chunks, r
 
 
 #py Prompt_sender.py --query "How long did Cathy stay at the Thrushcross Grange?" --database_name wuthering_heights --embedding_model "all-mpnet-base-v2"
-#py Prompt_sender.py --query "How long did Cathy stay at the Thrushcross Grange?" --database_name wuthering_heights --num_context_chunks 2
+#py Prompt_sender.py --query "How long did Cathy stay at the Thrushcross Grange?" --database_name wuthering_heights --num_context_chunks 2 --range_neighbor_chunks 2
 #py Prompt_sender.py --query "What did Alice find on a little glass table?" --database_name alice --num_context_chunks 2 --range_neighbor_chunks 3
 #py Prompt_sender.py --query "Why does Alice not like the look of her sister’s book?" --database_name alice --num_context_chunks 2
 #py Prompt_sender.py --query "What is the handbook about?" --database_name handbook --num_context_chunks 2
