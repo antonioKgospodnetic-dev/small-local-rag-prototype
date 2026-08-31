@@ -8,10 +8,10 @@ import time
 
 
 DATABASE_PATHS = {
-    "alice": "example_PDFs/Alice_in_wonderland.pdf" #,
-    #"wuthering_heights": "example_PDFs/Wuthering heights.pdf",
-    #"handbook": "example_PDFs/Handbook for quality and metadata reports ESS.pdf",
-    #"statistics": "example_PDFs/Eurostat - Urban-rural Europe- labour market.pdf"
+    "alice": "example_PDFs/Alice_in_wonderland.pdf",
+    "wuthering_heights": "example_PDFs/Wuthering heights.pdf",
+    "handbook": "example_PDFs/Handbook for quality and metadata reports ESS.pdf",
+    "statistics": "example_PDFs/Eurostat - Urban-rural Europe- labour market.pdf"
 }
 
 build_configurations = [
@@ -20,7 +20,7 @@ build_configurations = [
         "fixed_chunk_size": chunk_size
     }
     for embedding_model in SUPPORTED_EMBEDDING_MODELS
-    for chunk_size in [150, 250]
+    for chunk_size in [150, 300]
 ]
 
 retrieval_configurations = [
@@ -28,8 +28,8 @@ retrieval_configurations = [
         "num_context_chunks": num_chunks,
         "range_neighbor_chunks": neighbor_range
     }
-    for num_chunks in [1]
-    for neighbor_range in [0]
+    for num_chunks in [1,2,4]
+    for neighbor_range in [0,1,3]
 ]
 
 
@@ -117,8 +117,6 @@ def Evaluate(
 ):
     results = []
 
-    len_csv_rows = len(csv_rows)
-    i = 0
     for test in csv_rows:
         start_time = time.perf_counter()
 
@@ -154,15 +152,25 @@ def Evaluate(
             "construction_time": construction_elapsed_time
         }
 
-        i+=1
-        print(f"Completed {i}/{len_csv_rows} of tests for current configuration of {database_name}.")
-
         results.append(result)
 
     return results
 
 def BuildAndEvaluate(csv_rows):
     all_results = []    
+
+    valid_tests = [
+        test
+        for test in csv_rows
+        if test["database_name"] in DATABASE_PATHS
+    ]
+
+    total_runs = (
+        len(valid_tests)
+        * len(build_configurations)
+        * len(retrieval_configurations)
+    )
+    i = 0
 
     for build_config in build_configurations:
 
@@ -207,7 +215,8 @@ def BuildAndEvaluate(csv_rows):
                     range_neighbor_chunks,
                     construction_elapsed_time
                 )
-
+                i+=len(database_tests)
+                print(f"Completed {i}/{total_runs} so far")
                 all_results.extend(results)
                 
     return all_results
